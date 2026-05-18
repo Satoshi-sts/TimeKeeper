@@ -13,6 +13,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
         Settings = SettingsService.Load();
+
+        var mainWindow = new MainWindow();
+        MainWindow = mainWindow;
+        mainWindow.Show();
     }
 }
 

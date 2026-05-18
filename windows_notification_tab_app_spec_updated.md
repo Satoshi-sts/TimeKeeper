@@ -392,12 +392,8 @@ ET 08:00 - 09:00
 
 - ユーザーにダウンロードページを開かせる方式にはしない
 - アプリが直接、最新版情報と更新パッケージを取得する
-- 更新処理には Velopack を利用する
-- 更新確認、ダウンロード、適用、再起動は Velopack の `UpdateManager` を通して行う
-- 独自の GitHub Releases API 確認処理や zip/exe 直接ダウンロード型アップデーターは作り込まない
-- 更新パッケージの配置先は Public リポジトリ `Satoshi-sts/TimeKeeper-Releases` の GitHub Releases とする
-- 開発用 Private リポジトリ `Satoshi-sts/TimeKeeper` の Releases は更新確認先として使用しない
-- アプリ内に GitHub Personal Access Token などの認証情報を埋め込まない
+- 更新処理には Velopack を利用する想定とする
+- 更新パッケージの配置先は GitHub Releases または静的ファイル配信先を想定する
 - 更新確認、ダウンロード、適用、再起動までをアプリ側の操作で完結させる
 
 ### 13.3 更新確認
@@ -469,27 +465,6 @@ ET 08:00 - 09:00
 
 現在のバージョンは、アプリ本体のバージョン情報から取得する。  
 設定ファイルに現在バージョンを手動保存して管理しない。
-
-### 13.7 リリース手順
-
-将来的なリリース作業は以下の流れとする。
-
-1. `NotificationTabApp.csproj` の `Version`、`AssemblyVersion`、`FileVersion`、`InformationalVersion` を更新する
-2. アプリを Release / win-x64 で publish する
-3. Velopack CLI の `vpk pack` で更新パッケージを作成する
-4. 作成された `Setup.exe`、`.nupkg`、`releases.win.json` などを `Satoshi-sts/TimeKeeper-Releases` の GitHub Releases にアップロードする
-5. インストール済みアプリの「更新を確認」から更新確認、ダウンロード、適用、再起動を確認する
-
-更新テスト例:
-
-```text
-v0.1.0 をインストール
-v0.1.1 の更新パッケージを TimeKeeper-Releases にアップロード
-v0.1.0 アプリ内の「更新を確認」を実行
-v0.1.1 が表示される
-「更新する」でダウンロード
-再起動確認後、v0.1.1 として起動する
-```
 
 ---
 
@@ -630,3 +605,4 @@ et:123456789
 - ユーザーアカウント管理
 - テーマ切替
 - 詳細な通知履歴画面
+

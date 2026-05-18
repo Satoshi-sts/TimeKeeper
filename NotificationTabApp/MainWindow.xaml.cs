@@ -26,6 +26,7 @@ public partial class MainWindow : Window
 
     private SettingsWindow? _settingsWindow;
     private UpcomingWindow? _upcomingWindow;
+    private UpdateWindow? _updateWindow;
 
     private bool _isPinned = true;
 
@@ -97,10 +98,23 @@ public partial class MainWindow : Window
         PinButton.ToolTip = _isPinned ? "常に最前面: ON（クリックでOFF）" : "常に最前面: OFF（クリックでON）";
     }
 
+    // ---- プラスボタン ----
+    private void AddButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenSettingsWindow();
+    }
+
     // ---- 歯車ボタン ----
     private void GearButton_Click(object sender, RoutedEventArgs e)
     {
-        OpenSettingsWindow();
+        if (_updateWindow != null && _updateWindow.IsLoaded)
+        {
+            _updateWindow.Activate();
+            return;
+        }
+
+        _updateWindow = new UpdateWindow();
+        _updateWindow.Show();
     }
 
     private void UpcomingButton_Click(object sender, RoutedEventArgs e)

@@ -3,6 +3,8 @@ bin/
 obj/
 **/bin/
 **/obj/
+publish/
+Releases/
 
 # Visual Studio / Rider / VS Code local files
 .vs/
