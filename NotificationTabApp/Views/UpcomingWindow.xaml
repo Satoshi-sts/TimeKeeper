@@ -1,0 +1,73 @@
+<Window x:Class="NotificationTabApp.Views.UpcomingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="直近の予定 - TimeKeeper"
+        Width="460" Height="420"
+        MinHeight="280"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F5F5">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="直近の予定"
+                   FontSize="14"
+                   FontWeight="Bold"
+                   Margin="0,0,0,10"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="UpcomingList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="White"
+                                BorderBrush="#E0E0E0"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Margin="0,0,0,6"
+                                Padding="10,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding Title}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="#222"/>
+                                    <TextBlock Text="{Binding TimeText}"
+                                               FontSize="11"
+                                               Foreground="#666"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="x"
+                                        Width="24" Height="24"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        Foreground="#777"
+                                        FontSize="12"
+                                        Padding="0"
+                                        Cursor="Hand"
+                                        ToolTip="この予定をスキップ"
+                                        Click="SkipButton_Click"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <TextBlock x:Name="InfoText"
+                   Grid.Row="2"
+                   Foreground="#555"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="0,8,0,0"
+                   Visibility="Collapsed"/>
+    </Grid>
+</Window>
