@@ -7,9 +7,10 @@ namespace NotificationTabApp.Models
     {
         public double X { get; set; } = -1;
         public double Y { get; set; } = -1;
-        public double Width { get; set; } = 260;
+        public double Width { get; set; } = 320;
         public double Height { get; set; } = 48;
         public bool Pinned { get; set; } = true;
+        public bool Muted { get; set; }
         public double OpacityNormal { get; set; } = 0.5;
         public double OpacityHover { get; set; } = 0.8;
     }

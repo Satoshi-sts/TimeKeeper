@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private UpdateWindow? _updateWindow;
 
     private bool _isPinned = true;
+    private bool _isMuted;
 
     public MainWindow()
     {
@@ -52,8 +53,10 @@ public partial class MainWindow : Window
         }
 
         _isPinned = ws.Pinned;
+        _isMuted = ws.Muted;
         Topmost = _isPinned;
         UpdatePinButton();
+        UpdateMuteButton();
 
         _scheduler = new NotificationScheduler(() => _settings);
         _scheduler.NotificationFired += OnNotificationFired;
@@ -96,6 +99,26 @@ public partial class MainWindow : Window
     {
         PinButton.Opacity = _isPinned ? 1.0 : 0.4;
         PinButton.ToolTip = _isPinned ? "常に最前面: ON（クリックでOFF）" : "常に最前面: OFF（クリックでON）";
+    }
+
+    // ---- ミュートボタン ----
+    private void MuteButton_Click(object sender, RoutedEventArgs e)
+    {
+        _isMuted = !_isMuted;
+        _settings.MainWindow.Muted = _isMuted;
+        UpdateMuteButton();
+
+        if (_isMuted)
+            CloseAllActivePopups();
+
+        SaveWindowState();
+    }
+
+    private void UpdateMuteButton()
+    {
+        MuteButton.Content = _isMuted ? "🔕" : "🔔";
+        MuteButton.Opacity = _isMuted ? 1.0 : 0.65;
+        MuteButton.ToolTip = _isMuted ? "通知ミュート: ON（クリックでOFF）" : "通知ミュート: OFF（クリックでON）";
     }
 
     // ---- プラスボタン ----
@@ -166,6 +189,9 @@ public partial class MainWindow : Window
     // ---- 通知発火 ----
     private void OnNotificationFired(object? sender, NotificationFiredEventArgs e)
     {
+        if (_isMuted || _settings.MainWindow.Muted)
+            return;
+
         var item = e.Item;
 
         // ×で閉じた通知は同じ発火単位内では再表示しない
@@ -259,11 +285,21 @@ public partial class MainWindow : Window
             p.Close();
     }
 
+    private void CloseAllActivePopups()
+    {
+        foreach (var popup in _activePopups.Values.ToList())
+            popup.Close();
+
+        _activePopups.Clear();
+        PositionPopups();
+    }
+
     private void SaveWindowState()
     {
         _settings.MainWindow.X = Left;
         _settings.MainWindow.Y = Top;
         _settings.MainWindow.Pinned = _isPinned;
+        _settings.MainWindow.Muted = _isMuted;
         _settingsService.Save(_settings);
     }
 }

@@ -62,6 +62,12 @@ namespace NotificationTabApp.Services
             var eorzeaSnapshot = GetEorzeaSnapshot(nowUtc);
             var settings = _getSettings();
 
+            if (settings.MainWindow.Muted)
+            {
+                EndAllActiveNotifications();
+                return;
+            }
+
             foreach (var item in settings.Notifications.Concat(settings.OneTimeNotifications))
             {
                 if (item.IsOneTime && item.HasFired && !_firedKeys.ContainsKey(item.Id))
@@ -101,6 +107,15 @@ namespace NotificationTabApp.Services
                 {
                     NotificationEnded?.Invoke(this, new NotificationEndEventArgs(item.Id));
                 }
+            }
+        }
+
+        private void EndAllActiveNotifications()
+        {
+            foreach (var notificationId in _firedKeys.Keys.ToList())
+            {
+                _firedKeys.Remove(notificationId);
+                NotificationEnded?.Invoke(this, new NotificationEndEventArgs(notificationId));
             }
         }
 
