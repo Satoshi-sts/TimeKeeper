@@ -40,7 +40,7 @@ public partial class MainWindow : Window
 
         // ウィンドウ位置を復元
         var ws = _settings.MainWindow;
-        if (ws.X >= 0 && ws.Y >= 0)
+        if (IsSavedPositionVisible(ws.X, ws.Y))
         {
             Left = ws.X;
             Top = ws.Y;
@@ -66,6 +66,23 @@ public partial class MainWindow : Window
         LocationChanged += (_, _) => PositionPopups();
         SizeChanged += (_, _) => PositionPopups();
         Closed += MainWindow_Closed;
+    }
+
+    private bool IsSavedPositionVisible(double x, double y)
+    {
+        if (x < 0 || y < 0)
+            return false;
+
+        var left = SystemParameters.VirtualScreenLeft;
+        var top = SystemParameters.VirtualScreenTop;
+        var right = left + SystemParameters.VirtualScreenWidth;
+        var bottom = top + SystemParameters.VirtualScreenHeight;
+        const double minimumVisibleSize = 40;
+
+        return x >= left - Width + minimumVisibleSize &&
+               x <= right - minimumVisibleSize &&
+               y >= top - Height + minimumVisibleSize &&
+               y <= bottom - minimumVisibleSize;
     }
 
     // ---- ドラッグ移動 ----
