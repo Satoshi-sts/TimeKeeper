@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an improvement for TimeKeeper.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please describe the workflow rather than only the UI change.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like TimeKeeper to support.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Describe any workaround or alternate design you considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add screenshots, related issues, or constraints if useful.

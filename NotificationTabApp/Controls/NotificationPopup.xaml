@@ -10,8 +10,7 @@
         Topmost="True"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        ShowActivated="False"
-        Focusable="False">
+        ShowActivated="False">
     <Border x:Name="PopupBorder"
             Background="#A8222222"
             BorderBrush="#80FFFFFF"
@@ -30,15 +29,46 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="TitleText"
-                           Grid.Column="0"
-                           Foreground="White"
-                           FontWeight="Bold"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           VerticalAlignment="Center"/>
+                <TextBox x:Name="TitleText"
+                         Grid.Column="0"
+                         Foreground="White"
+                         FontWeight="Bold"
+                         FontSize="12"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center"
+                         IsReadOnly="True"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="0"
+                         Cursor="IBeam"/>
                 <Button Grid.Column="1"
+                        Content="🔕"
+                        Width="20" Height="20"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        Foreground="#DDDDDD"
+                        FontSize="11"
+                        Padding="0"
+                        Cursor="Hand"
+                        ToolTip="この通知をミュート"
+                        Click="MuteButton_Click"
+                        VerticalAlignment="Top"/>
+                <Button Grid.Column="2"
+                        Content="↗"
+                        Width="20" Height="20"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        Foreground="#DDDDDD"
+                        FontSize="11"
+                        Padding="0"
+                        Cursor="Hand"
+                        ToolTip="この通知を開く"
+                        Click="OpenButton_Click"
+                        VerticalAlignment="Top"/>
+                <Button Grid.Column="3"
                         Content="x"
                         Width="20" Height="20"
                         Background="Transparent"
@@ -50,18 +80,29 @@
                         Click="CloseButton_Click"
                         VerticalAlignment="Top"/>
             </Grid>
-            <TextBlock x:Name="TimeText"
-                       Grid.Row="1"
-                       Foreground="#BBBBBB"
-                       FontSize="10"
-                       TextWrapping="Wrap"
-                       Margin="0,2,0,0"/>
-            <TextBlock x:Name="MessageText"
-                       Grid.Row="2"
-                       Foreground="#DDDDDD"
-                       FontSize="11"
-                       TextWrapping="Wrap"
-                       Margin="0,4,0,0"/>
+            <TextBox x:Name="TimeText"
+                     Grid.Row="1"
+                     Foreground="#BBBBBB"
+                     FontSize="10"
+                     TextWrapping="Wrap"
+                     Margin="0,2,0,0"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Padding="0"
+                     Cursor="IBeam"/>
+            <TextBox x:Name="MessageText"
+                     Grid.Row="2"
+                     Foreground="#DDDDDD"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     Margin="0,4,0,0"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Padding="0"
+                     AcceptsReturn="True"
+                     Cursor="IBeam"/>
         </Grid>
     </Border>
 </Window>

@@ -10,11 +10,13 @@ namespace NotificationTabApp.Services
     {
         public NotificationItem Item { get; }
         public string TriggerKey { get; }
+        public NotificationTimeRange TimeRange { get; }
 
-        public NotificationFiredEventArgs(NotificationItem item, string triggerKey)
+        public NotificationFiredEventArgs(NotificationItem item, string triggerKey, NotificationTimeRange timeRange)
         {
             Item = item;
             TriggerKey = triggerKey;
+            TimeRange = timeRange;
         }
     }
 
@@ -80,33 +82,50 @@ namespace NotificationTabApp.Services
                     continue;
                 }
 
-                if (!TryParseTime(item.StartTime, out var startH, out var startM)) continue;
-                if (!TryParseTime(item.EndTime, out var endH, out var endM)) continue;
-
-                var startMin = startH * 60 + startM;
-                var endMin = endH * 60 + endM;
                 var mode = NormalizeTimeMode(item.TimeMode);
                 var nowMin = GetCurrentMinute(mode, now, eorzeaSnapshot);
-                var triggerKey = GetTriggerKey(mode, now, eorzeaSnapshot);
-                var inRange = IsInRange(nowMin, startMin, endMin);
-                var isSkipped = settings.SkippedOccurrences.Any(s =>
-                    s.NotificationId == item.Id && s.TriggerKey == triggerKey);
+                var activeOccurrence = GetActiveOccurrence(item, mode, nowMin, now, eorzeaSnapshot);
+                var hasFired = _firedKeys.TryGetValue(item.Id, out var firedKey);
 
-                if (isSkipped && !_firedKeys.ContainsKey(item.Id))
+                if (activeOccurrence == null)
+                {
+                    if (hasFired)
+                    {
+                        _firedKeys.Remove(item.Id);
+                        NotificationEnded?.Invoke(this, new NotificationEndEventArgs(item.Id));
+                    }
+
+                    continue;
+                }
+
+                var isSkipped = settings.SkippedOccurrences.Any(s =>
+                    s.NotificationId == item.Id && s.TriggerKey == activeOccurrence.TriggerKey);
+
+                if (isSkipped && (!hasFired || firedKey != activeOccurrence.TriggerKey))
+                {
+                    if (hasFired)
+                    {
+                        _firedKeys.Remove(item.Id);
+                        NotificationEnded?.Invoke(this, new NotificationEndEventArgs(item.Id));
+                    }
+
+                    continue;
+                }
+
+                if (hasFired && firedKey == activeOccurrence.TriggerKey)
                     continue;
 
-                if (!(_firedKeys.TryGetValue(item.Id, out var firedKey) && firedKey == triggerKey))
+                if (hasFired)
                 {
-                    if (inRange)
-                    {
-                        _firedKeys[item.Id] = triggerKey;
-                        NotificationFired?.Invoke(this, new NotificationFiredEventArgs(item, triggerKey));
-                    }
-                }
-                else if (!inRange)
-                {
+                    _firedKeys.Remove(item.Id);
                     NotificationEnded?.Invoke(this, new NotificationEndEventArgs(item.Id));
                 }
+
+                _firedKeys[item.Id] = activeOccurrence.TriggerKey;
+                NotificationFired?.Invoke(this, new NotificationFiredEventArgs(
+                    item,
+                    activeOccurrence.TriggerKey,
+                    activeOccurrence.TimeRange));
             }
         }
 
@@ -127,12 +146,84 @@ namespace NotificationTabApp.Services
             return now.Hour * 60 + now.Minute;
         }
 
-        private static string GetTriggerKey(string mode, DateTime now, EorzeaTimeSnapshot eorzeaSnapshot)
+        private static ActiveOccurrence? GetActiveOccurrence(
+            NotificationItem item,
+            string mode,
+            int nowMin,
+            DateTime now,
+            EorzeaTimeSnapshot eorzeaSnapshot)
         {
-            if (mode == EorzeaTimeMode)
-                return $"et:{eorzeaSnapshot.DayNumber}";
+            var ranges = GetTimeRanges(item).ToList();
+            var useRangeKey = ranges.Count > 1;
 
-            return $"real:{now:yyyy-MM-dd}";
+            foreach (var range in ranges)
+            {
+                if (!TryParseStartTime(range.StartTime, out var startMin)) continue;
+                if (!TryParseEndTime(range.EndTime, out var endMin)) continue;
+                if (startMin == endMin) continue;
+                if (!IsInRange(nowMin, startMin, endMin)) continue;
+
+                return new ActiveOccurrence(
+                    range,
+                    GetTriggerKey(mode, now, eorzeaSnapshot, nowMin, startMin, endMin, range, useRangeKey));
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<NotificationTimeRange> GetTimeRanges(NotificationItem item)
+        {
+            if (item.TimeRanges is { Count: > 0 })
+                return item.TimeRanges;
+
+            return new[]
+            {
+                new NotificationTimeRange
+                {
+                    StartTime = item.StartTime,
+                    EndTime = item.EndTime
+                }
+            };
+        }
+
+        private static string GetTriggerKey(
+            string mode,
+            DateTime now,
+            EorzeaTimeSnapshot eorzeaSnapshot,
+            int nowMin,
+            int startMin,
+            int endMin,
+            NotificationTimeRange range,
+            bool useRangeKey)
+        {
+            var rangeKey = useRangeKey
+                ? $":{range.StartTime.Replace(":", "")}-{range.EndTime.Replace(":", "")}"
+                : string.Empty;
+
+            if (mode == EorzeaTimeMode)
+            {
+                var dayNumber = GetOccurrenceDayNumber(eorzeaSnapshot.DayNumber, nowMin, startMin, endMin);
+                return $"et:{dayNumber}{rangeKey}";
+            }
+
+            var date = GetOccurrenceDate(now.Date, nowMin, startMin, endMin);
+            return $"real:{date:yyyy-MM-dd}{rangeKey}";
+        }
+
+        private static DateTime GetOccurrenceDate(DateTime currentDate, int nowMin, int startMin, int endMin)
+        {
+            if (CrossesMidnight(startMin, endMin) && nowMin < endMin)
+                return currentDate.AddDays(-1);
+
+            return currentDate;
+        }
+
+        private static long GetOccurrenceDayNumber(long currentDayNumber, int nowMin, int startMin, int endMin)
+        {
+            if (CrossesMidnight(startMin, endMin) && nowMin < endMin)
+                return currentDayNumber - 1;
+
+            return currentDayNumber;
         }
 
         private static EorzeaTimeSnapshot GetEorzeaSnapshot(DateTimeOffset nowUtc)
@@ -173,20 +264,39 @@ namespace NotificationTabApp.Services
             return nowMin >= startMin || nowMin < endMin;
         }
 
-        private static bool TryParseTime(string time, out int hours, out int minutes)
+        private static bool CrossesMidnight(int startMin, int endMin)
+            => endMin <= startMin;
+
+        private static bool TryParseStartTime(string time, out int minutesOfDay)
+            => TryParseTime(time, allow24Hour: false, out minutesOfDay);
+
+        private static bool TryParseEndTime(string time, out int minutesOfDay)
+            => TryParseTime(time, allow24Hour: true, out minutesOfDay);
+
+        private static bool TryParseTime(string time, bool allow24Hour, out int minutesOfDay)
         {
-            hours = 0;
-            minutes = 0;
+            minutesOfDay = 0;
             if (string.IsNullOrEmpty(time)) return false;
 
             var parts = time.Split(':');
             if (parts.Length != 2) return false;
-            if (!int.TryParse(parts[0], out hours) || !int.TryParse(parts[1], out minutes))
+            if (!int.TryParse(parts[0], out var hours) || !int.TryParse(parts[1], out var minutes))
                 return false;
 
-            return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+            if (allow24Hour && hours == 24 && minutes == 0)
+            {
+                minutesOfDay = 24 * 60;
+                return true;
+            }
+
+            if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)
+                return false;
+
+            minutesOfDay = hours * 60 + minutes;
+            return true;
         }
 
+        private sealed record ActiveOccurrence(NotificationTimeRange TimeRange, string TriggerKey);
         private readonly record struct EorzeaTimeSnapshot(long DayNumber, int Hour, int Minute);
     }
 }

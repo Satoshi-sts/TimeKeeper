@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -27,7 +29,7 @@ namespace NotificationTabApp.Views
 
         public string DisplayTitle => Item.Title;
         public string TimeModeLabel => Item.TimeMode == "eorzea" ? "ET" : "現実時間";
-        public string TimeRange => $"{TimeModeLabel}  {Item.StartTime} - {Item.EndTime}";
+        public string TimeRange => $"{TimeModeLabel}  {string.Join(", ", GetTimeRanges(Item).Select(r => $"{r.StartTime} - {r.EndTime}"))}";
         public string CheckLabel => IsDeleteMode ? "削除" : "通知";
         public string CheckBrush => IsDeleteMode ? "#D32F2F" : "#555555";
         public string ItemBackground => IsDeleteMode ? "#FFFFF7F7" : "White";
@@ -47,6 +49,21 @@ namespace NotificationTabApp.Views
 
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        internal static IEnumerable<NotificationTimeRange> GetTimeRanges(NotificationItem item)
+        {
+            if (item.TimeRanges is { Count: > 0 })
+                return item.TimeRanges;
+
+            return new[]
+            {
+                new NotificationTimeRange
+                {
+                    StartTime = item.StartTime,
+                    EndTime = item.EndTime
+                }
+            };
+        }
     }
 
     public class NotificationGroupViewModel : INotifyPropertyChanged
@@ -101,7 +118,9 @@ namespace NotificationTabApp.Views
     {
         private readonly AppSettings _settings;
         private readonly SettingsService _settingsService;
+        private const string NoSearchResultsMessage = "検索条件に一致する通知はありません。";
         private bool _isDeleteMode;
+        private string _searchText = string.Empty;
         private ObservableCollection<NotificationGroupViewModel> _groups = new();
 
         public NotificationListWindow()
@@ -117,30 +136,49 @@ namespace NotificationTabApp.Views
         private void Refresh()
         {
             var groups = new List<NotificationGroupViewModel>();
+            var searchTokens = CreateSearchTokens(_searchText);
+            var hasSearchQuery = searchTokens.Count > 0;
 
             var ungroupedItems = _settings.Notifications
                 .Where(n => string.IsNullOrWhiteSpace(n.GroupId))
+                .Where(n => MatchesSearch(n, "無所属", searchTokens))
                 .Select(n => new NotificationViewModel(n, _isDeleteMode));
-            groups.Add(new NotificationGroupViewModel(string.Empty, "無所属", null, ungroupedItems, _isDeleteMode));
+            AddGroup(groups, string.Empty, "無所属", null, ungroupedItems, _isDeleteMode, hasSearchQuery);
 
             foreach (var group in _settings.NotificationGroups.OrderBy(g => g.Name))
             {
                 var items = _settings.Notifications
                     .Where(n => n.GroupId == group.Id)
+                    .Where(n => MatchesSearch(n, group.Name, searchTokens))
                     .Select(n => new NotificationViewModel(n, _isDeleteMode));
-                groups.Add(new NotificationGroupViewModel(group.Id, group.Name, group, items, _isDeleteMode));
+                AddGroup(groups, group.Id, group.Name, group, items, _isDeleteMode, hasSearchQuery);
             }
 
             var knownGroupIds = _settings.NotificationGroups.Select(g => g.Id).ToHashSet();
             var orphanedItems = _settings.Notifications
                 .Where(n => !string.IsNullOrWhiteSpace(n.GroupId) && !knownGroupIds.Contains(n.GroupId))
+                .Where(n => MatchesSearch(n, "不明なグループ", searchTokens))
                 .Select(n => new NotificationViewModel(n, _isDeleteMode));
-            if (orphanedItems.Any())
-                groups.Add(new NotificationGroupViewModel("__missing", "不明なグループ", null, orphanedItems, _isDeleteMode));
+            AddGroup(groups, "__missing", "不明なグループ", null, orphanedItems, _isDeleteMode, hasSearchQuery);
 
             _groups = new ObservableCollection<NotificationGroupViewModel>(groups);
             GroupList.ItemsSource = _groups;
             UpdateDeleteModeUI();
+            UpdateSearchUI(hasSearchQuery, _groups.Sum(g => g.Items.Count));
+        }
+
+        private static void AddGroup(
+            ICollection<NotificationGroupViewModel> groups,
+            string id,
+            string name,
+            NotificationGroup? group,
+            IEnumerable<NotificationViewModel> items,
+            bool isDeleteMode,
+            bool hasSearchQuery)
+        {
+            var itemList = items.ToList();
+            if (!hasSearchQuery || itemList.Count > 0)
+                groups.Add(new NotificationGroupViewModel(id, name, group, itemList, isDeleteMode));
         }
 
         private void UpdateDeleteModeUI()
@@ -163,6 +201,35 @@ namespace NotificationTabApp.Views
             DeleteModeButton.Background = new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35));
         }
 
+        private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            _searchText = SearchBox.Text ?? string.Empty;
+            if (InfoText.Text != NoSearchResultsMessage)
+                InfoText.Visibility = Visibility.Collapsed;
+
+            Refresh();
+        }
+
+        private void ClearSearchButton_Click(object sender, RoutedEventArgs e)
+        {
+            SearchBox.Clear();
+            SearchBox.Focus();
+        }
+
+        private void UpdateSearchUI(bool hasSearchQuery, int visibleItemCount)
+        {
+            ClearSearchButton.Visibility = hasSearchQuery ? Visibility.Visible : Visibility.Collapsed;
+
+            if (hasSearchQuery && visibleItemCount == 0)
+            {
+                ShowInfo(NoSearchResultsMessage);
+                return;
+            }
+
+            if (InfoText.Text == NoSearchResultsMessage)
+                InfoText.Visibility = Visibility.Collapsed;
+        }
+
         private void GroupEnabledCheckBox_Changed(object sender, RoutedEventArgs e)
         {
             if (_isDeleteMode) return;
@@ -170,7 +237,7 @@ namespace NotificationTabApp.Views
             if (sender is CheckBox cb && cb.DataContext is NotificationGroupViewModel vm && vm.Group != null)
             {
                 vm.Group.Enabled = cb.IsChecked == true;
-                vm.Group.UpdatedAt = System.DateTime.Now.ToString("o");
+                vm.Group.UpdatedAt = DateTime.Now.ToString("o");
                 _settingsService.Save(_settings);
             }
         }
@@ -247,6 +314,52 @@ namespace NotificationTabApp.Views
         {
             InfoText.Text = message;
             InfoText.Visibility = Visibility.Visible;
+        }
+
+        private static IReadOnlyList<string> CreateSearchTokens(string searchText)
+        {
+            return searchText
+                .Split(new[] { ' ', '\t', '\r', '\n', '　' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(NormalizeForSearch)
+                .Where(token => token.Length > 0)
+                .ToList();
+        }
+
+        private static bool MatchesSearch(NotificationItem item, string groupName, IReadOnlyList<string> tokens)
+        {
+            if (tokens.Count == 0)
+                return true;
+
+            var ranges = string.Join(" ", NotificationViewModel.GetTimeRanges(item).Select(r => $"{r.StartTime} {r.EndTime} {r.StartTime}-{r.EndTime}"));
+            var timeMode = item.TimeMode == "eorzea" ? "ET eorzea エオルゼア時間" : "real 現実時間";
+            var searchSource = NormalizeForSearch(string.Join(" ", item.Title, item.Message, groupName, timeMode, ranges));
+
+            return tokens.All(token => IsFuzzyMatch(searchSource, token));
+        }
+
+        private static string NormalizeForSearch(string value)
+        {
+            var normalized = value.Normalize(NormalizationForm.FormKC).ToUpperInvariant();
+            return new string(normalized.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        }
+
+        private static bool IsFuzzyMatch(string text, string token)
+        {
+            if (text.Contains(token, StringComparison.Ordinal))
+                return true;
+
+            var tokenIndex = 0;
+            foreach (var c in text)
+            {
+                if (c != token[tokenIndex])
+                    continue;
+
+                tokenIndex++;
+                if (tokenIndex == token.Length)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

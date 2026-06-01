@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible problem in TimeKeeper.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please avoid including private reminder text or personal data.
+  - type: input
+    id: version
+    attributes:
+      label: TimeKeeper version
+      description: Example: 0.1.9
+    validations:
+      required: true
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+      description: Example: Windows 11 23H2
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Installation method
+      options:
+        - Setup.exe
+        - Portable zip
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that reproduces the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Screenshots, logs, or related notes if safe to share.

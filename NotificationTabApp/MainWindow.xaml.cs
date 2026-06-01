@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, string> _userClosedTriggerKeys = new();
 
     private SettingsWindow? _settingsWindow;
+    private NotificationListWindow? _notificationListWindow;
     private UpcomingWindow? _upcomingWindow;
     private UpdateWindow? _updateWindow;
 
@@ -157,6 +158,18 @@ public partial class MainWindow : Window
         _updateWindow.Show();
     }
 
+    private void NotificationListButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_notificationListWindow != null && _notificationListWindow.IsLoaded)
+        {
+            _notificationListWindow.Activate();
+            return;
+        }
+
+        _notificationListWindow = new NotificationListWindow();
+        _notificationListWindow.Show();
+    }
+
     private void UpcomingButton_Click(object sender, RoutedEventArgs e)
     {
         if (_upcomingWindow != null && _upcomingWindow.IsLoaded)
@@ -173,9 +186,15 @@ public partial class MainWindow : Window
     {
         if (_settingsWindow != null && _settingsWindow.IsLoaded)
         {
-            _settingsWindow.Activate();
-            return;
+            if (editItem == null || _settingsWindow.EditingNotificationId == editItem.Id)
+            {
+                _settingsWindow.Activate();
+                return;
+            }
+
+            _settingsWindow.Close();
         }
+
         _settingsWindow = new SettingsWindow(editItem);
         _settingsWindow.Show();
     }
@@ -222,8 +241,10 @@ public partial class MainWindow : Window
         // 通知音
         try { SystemSounds.Asterisk.Play(); } catch { }
 
-        var popup = new NotificationPopup(item);
+        var popup = new NotificationPopup(item, e.TimeRange);
         popup.UserClosed += (_, notificationId) => OnPopupUserClosed(notificationId, e.TriggerKey);
+        popup.OpenRequested += (_, notificationId) => OnPopupOpenRequested(notificationId);
+        popup.MuteRequested += (_, notificationId) => OnPopupMuteRequested(notificationId);
         _activePopups[item.Id] = popup;
 
         if (item.IsOneTime)
@@ -263,6 +284,50 @@ public partial class MainWindow : Window
         _userClosedTriggerKeys[notificationId] = triggerKey;
         _activePopups.Remove(notificationId);
         PositionPopups();
+    }
+
+    private void OnPopupOpenRequested(string notificationId)
+    {
+        var item = FindNotification(notificationId);
+        if (item == null)
+            return;
+
+        OpenSettingsWindow(item);
+    }
+
+    private void OnPopupMuteRequested(string notificationId)
+    {
+        var item = FindNotification(notificationId);
+        if (item == null)
+            return;
+
+        var result = MessageBox.Show(
+            "この通知をミュートしますか？",
+            "通知のミュート",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        item.Enabled = false;
+        item.UpdatedAt = DateTime.Now.ToString("o");
+        _settingsService.Save(_settings);
+        _upcomingWindow?.Refresh();
+
+        if (_activePopups.TryGetValue(notificationId, out var popup))
+        {
+            _activePopups.Remove(notificationId);
+            popup.Close();
+            PositionPopups();
+        }
+    }
+
+    private NotificationItem? FindNotification(string notificationId)
+    {
+        return _settings.Notifications
+            .Concat(_settings.OneTimeNotifications)
+            .FirstOrDefault(i => i.Id == notificationId);
     }
 
     // ポップアップを通常画面の下に縦並びで配置

@@ -29,13 +29,13 @@ Release は、ユーザーにアプリ内更新として配布したいタイミ
 
 ## 3. リリースノート作成
 
-リリースごとにリリースノートを作成する。
+リリースごとに `docs/release-notes` 配下へリリースノートを作成する。
 リリースノート本文は日本語で書く。
 
 例:
 
 ```text
-release-notes-0.1.3.md
+docs/release-notes/release-notes-0.1.3.md
 ```
 
 内容例:
@@ -66,7 +66,7 @@ dotnet publish NotificationTabApp\NotificationTabApp.csproj -c Release -r win-x6
 ## 6. Velopack パッケージ作成
 
 ```powershell
-vpk pack --packId TimeKeeper --packVersion 0.1.3 --packDir publish --mainExe NotificationTabApp.exe --packTitle TimeKeeper --outputDir Releases --releaseNotes release-notes-0.1.3.md
+vpk pack --packId TimeKeeper --packVersion 0.1.3 --packDir publish --mainExe NotificationTabApp.exe --packTitle TimeKeeper --outputDir Releases --releaseNotes .\docs\release-notes\release-notes-0.1.3.md
 ```
 
 `Releases` フォルダに以下のようなファイルが生成される。
@@ -100,7 +100,7 @@ gh release create v0.1.3 `
   .\Releases\RELEASES `
   --repo Satoshi-sts/TimeKeeper-Releases `
   --title "TimeKeeper v0.1.3" `
-  --notes-file .\release-notes-0.1.3.md
+  --notes-file .\docs\release-notes\release-notes-0.1.3.md
 ```
 
 delta パッケージが存在しない場合は、該当する `.nupkg` の引数を外す。
@@ -121,6 +121,6 @@ delta パッケージが存在しない場合は、該当する `.nupkg` の引�
 - 過去の GitHub Releases は削除しない。
 - `TimeKeeper-Releases` にソースコードをアップロードしない。
 - アプリに GitHub トークンや Personal Access Token を埋め込まない。
-- 開発用 Private リポジトリ `Satoshi-sts/TimeKeeper` を更新元にしない。
+- ソースコード管理用リポジトリ `Satoshi-sts/TimeKeeper` を更新元にしない。
 - `Releases` フォルダ内の manifest は過去バージョン情報を含むため、リリース作業中に必要なく削除しない。
 - コード署名を導入するまでは Velopack の pack 時に署名なし警告が出る。これは現時点では許容する。

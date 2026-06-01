@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
@@ -91,6 +92,63 @@ namespace NotificationTabApp.Services
 
             item.GroupId ??= string.Empty;
             item.IsOneTime = isOneTime;
+            item.TimeRanges ??= new();
+
+            item.TimeRanges = item.TimeRanges
+                .Where(r => IsValidStartTime(r.StartTime) && IsValidEndTime(r.EndTime) && r.StartTime != r.EndTime)
+                .Select(r => new NotificationTimeRange
+                {
+                    StartTime = r.StartTime,
+                    EndTime = r.EndTime
+                })
+                .ToList();
+
+            if (item.TimeRanges.Count == 0 &&
+                IsValidStartTime(item.StartTime) &&
+                IsValidEndTime(item.EndTime) &&
+                item.StartTime != item.EndTime)
+            {
+                item.TimeRanges.Add(new NotificationTimeRange
+                {
+                    StartTime = item.StartTime,
+                    EndTime = item.EndTime
+                });
+            }
+
+            if (item.TimeRanges.Count > 0)
+            {
+                item.StartTime = item.TimeRanges[0].StartTime;
+                item.EndTime = item.TimeRanges[0].EndTime;
+            }
+        }
+
+        private static bool IsValidStartTime(string? time)
+            => TryParseTime(time, allow24Hour: false, out _);
+
+        private static bool IsValidEndTime(string? time)
+            => TryParseTime(time, allow24Hour: true, out _);
+
+        private static bool TryParseTime(string? time, bool allow24Hour, out int minutesOfDay)
+        {
+            minutesOfDay = 0;
+            if (string.IsNullOrEmpty(time)) return false;
+
+            var parts = time.Split(':');
+            if (parts.Length != 2) return false;
+            if (!int.TryParse(parts[0], out var hours) || !int.TryParse(parts[1], out var minutes))
+                return false;
+
+            if (allow24Hour && hours == 24 && minutes == 0)
+            {
+                minutesOfDay = 24 * 60;
+                return true;
+            }
+
+            if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)
+                return false;
+
+            minutesOfDay = hours * 60 + minutes;
+            return true;
         }
     }
 }

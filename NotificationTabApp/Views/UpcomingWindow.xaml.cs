@@ -11,14 +11,20 @@ namespace NotificationTabApp.Views
     public class UpcomingItemViewModel
     {
         public NotificationItem Item { get; }
+        public NotificationTimeRange TimeRange { get; }
         public DateTimeOffset DueAt { get; }
         public string TriggerKey { get; }
         public string Title => Item.Title;
-        public string TimeText => $"{(Item.TimeMode == "eorzea" ? "ET" : "現実時間")} {Item.StartTime} - {Item.EndTime}";
+        public string TimeText => $"{(Item.TimeMode == "eorzea" ? "ET" : "現実時間")} {TimeRange.StartTime} - {TimeRange.EndTime}";
 
-        public UpcomingItemViewModel(NotificationItem item, DateTimeOffset dueAt, string triggerKey)
+        public UpcomingItemViewModel(
+            NotificationItem item,
+            NotificationTimeRange timeRange,
+            DateTimeOffset dueAt,
+            string triggerKey)
         {
             Item = item;
+            TimeRange = timeRange;
             DueAt = dueAt;
             TriggerKey = triggerKey;
         }
@@ -46,9 +52,7 @@ namespace NotificationTabApp.Views
             var items = _settings.Notifications
                 .Concat(_settings.OneTimeNotifications)
                 .Where(IsVisibleCandidate)
-                .Select(CreateUpcomingItem)
-                .Where(i => i != null)
-                .Cast<UpcomingItemViewModel>()
+                .SelectMany(CreateUpcomingItems)
                 .Where(i => !_settings.SkippedOccurrences.Any(s =>
                     s.NotificationId == i.Item.Id && s.TriggerKey == i.TriggerKey))
                 .OrderBy(i => i.DueAt)
@@ -74,28 +78,55 @@ namespace NotificationTabApp.Views
             return group?.Enabled ?? true;
         }
 
-        private static UpcomingItemViewModel? CreateUpcomingItem(NotificationItem item)
+        private static IEnumerable<UpcomingItemViewModel> CreateUpcomingItems(NotificationItem item)
         {
-            if (!TryParseTime(item.StartTime, out var startH, out var startM))
-                return null;
+            var ranges = GetTimeRanges(item).ToList();
+            var useRangeKey = ranges.Count > 1;
 
-            var startMin = startH * 60 + startM;
-            if (item.TimeMode == "eorzea")
-                return CreateEorzeaUpcomingItem(item, startMin);
+            foreach (var range in ranges)
+            {
+                if (!TryParseStartTime(range.StartTime, out var startMin))
+                    continue;
 
-            return CreateRealUpcomingItem(item, startMin);
+                yield return item.TimeMode == "eorzea"
+                    ? CreateEorzeaUpcomingItem(item, range, startMin, useRangeKey)
+                    : CreateRealUpcomingItem(item, range, startMin, useRangeKey);
+            }
         }
 
-        private static UpcomingItemViewModel CreateRealUpcomingItem(NotificationItem item, int startMin)
+        private static IEnumerable<NotificationTimeRange> GetTimeRanges(NotificationItem item)
+        {
+            if (item.TimeRanges is { Count: > 0 })
+                return item.TimeRanges;
+
+            return new[]
+            {
+                new NotificationTimeRange
+                {
+                    StartTime = item.StartTime,
+                    EndTime = item.EndTime
+                }
+            };
+        }
+
+        private static UpcomingItemViewModel CreateRealUpcomingItem(
+            NotificationItem item,
+            NotificationTimeRange range,
+            int startMin,
+            bool useRangeKey)
         {
             var now = DateTime.Now;
             var todayStart = now.Date.AddMinutes(startMin);
             var dueAt = todayStart > now ? todayStart : todayStart.AddDays(1);
-            var triggerKey = $"real:{dueAt:yyyy-MM-dd}";
-            return new UpcomingItemViewModel(item, new DateTimeOffset(dueAt), triggerKey);
+            var triggerKey = $"real:{dueAt:yyyy-MM-dd}{GetRangeKey(range, useRangeKey)}";
+            return new UpcomingItemViewModel(item, range, new DateTimeOffset(dueAt), triggerKey);
         }
 
-        private static UpcomingItemViewModel CreateEorzeaUpcomingItem(NotificationItem item, int startMin)
+        private static UpcomingItemViewModel CreateEorzeaUpcomingItem(
+            NotificationItem item,
+            NotificationTimeRange range,
+            int startMin,
+            bool useRangeKey)
         {
             var nowUtc = DateTimeOffset.UtcNow;
             var eorzeaTotalSeconds = nowUtc.ToUnixTimeSeconds() * EorzeaMultiplier;
@@ -109,10 +140,15 @@ namespace NotificationTabApp.Views
             var targetEorzeaSeconds = targetDay * 86400.0 + startMin * 60.0;
             var targetEarthSeconds = targetEorzeaSeconds / EorzeaMultiplier;
             var dueAt = DateTimeOffset.UnixEpoch.AddSeconds(targetEarthSeconds).ToLocalTime();
-            var triggerKey = $"et:{targetDay}";
+            var triggerKey = $"et:{targetDay}{GetRangeKey(range, useRangeKey)}";
 
-            return new UpcomingItemViewModel(item, dueAt, triggerKey);
+            return new UpcomingItemViewModel(item, range, dueAt, triggerKey);
         }
+
+        private static string GetRangeKey(NotificationTimeRange range, bool useRangeKey)
+            => useRangeKey
+                ? $":{range.StartTime.Replace(":", "")}-{range.EndTime.Replace(":", "")}"
+                : string.Empty;
 
         private void SkipButton_Click(object sender, RoutedEventArgs e)
         {
@@ -121,7 +157,7 @@ namespace NotificationTabApp.Views
 
             var message = vm.Item.IsOneTime
                 ? "この一度限りの通知を削除します。"
-                : "この通知をスキップします。ただし、繰り返し通知するものに関しては以降の通知は通常通り通知されます。";
+                : "この通知時間帯をスキップします。同じ通知の他の時間帯には影響しません。";
 
             var result = MessageBox.Show(
                 $"{message}\n\nスキップしますか？",
@@ -150,18 +186,21 @@ namespace NotificationTabApp.Views
             Refresh();
         }
 
-        private static bool TryParseTime(string time, out int hours, out int minutes)
+        private static bool TryParseStartTime(string time, out int minutesOfDay)
         {
-            hours = 0;
-            minutes = 0;
+            minutesOfDay = 0;
             if (string.IsNullOrEmpty(time)) return false;
 
             var parts = time.Split(':');
             if (parts.Length != 2) return false;
-            if (!int.TryParse(parts[0], out hours) || !int.TryParse(parts[1], out minutes))
+            if (!int.TryParse(parts[0], out var hours) || !int.TryParse(parts[1], out var minutes))
                 return false;
 
-            return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+            if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)
+                return false;
+
+            minutesOfDay = hours * 60 + minutes;
+            return true;
         }
     }
 }
